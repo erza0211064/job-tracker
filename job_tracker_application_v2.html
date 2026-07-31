@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full bg-slate-900 text-slate-100">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>求職進度與職缺備份追蹤器 (Job Application Tracker)</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN for visualizations -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- FontAwesome Icons CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <!-- Google Fonts: Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    /* Custom Scrollbar Styling */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #1e293b;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #475569;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #64748b;
+    }
+  </style>
+</head>
+
+<body class="h-full flex flex-col font-sans antialiased selection:bg-indigo-500 selection:text-white min-h-screen">
+
+  <!-- Header Bar -->
+  <header class="bg-slate-800/80 backdrop-blur border-b border-slate-700/60 sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div
+          class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/20">
+          <i class="fa-solid fa-briefcase text-lg"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-white tracking-wide">JobTracker <span
+              class="text-xs px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-medium">Pro</span>
+          </h1>
+          <p class="text-xs text-slate-400 hidden sm:block">職缺內文自動備份 & 求職進度視覺化看板</p>
+        </div>
+      </div>
+
+      <!-- Header Action Buttons -->
+      <div class="flex items-center space-x-2 sm:space-x-3">
+        <button id="btnBookmarkletHelp"
+          class="px-3 py-2 text-xs sm:text-sm font-medium text-slate-300 bg-slate-700/60 hover:bg-slate-700 hover:text-white rounded-lg border border-slate-600 transition flex items-center space-x-1.5">
+          <i class="fa-solid fa-bookmark text-indigo-400"></i>
+          <span class="hidden md:inline">一鍵備份書籤</span>
+        </button>
+        <button id="btnExportData"
+          class="px-3 py-2 text-xs sm:text-sm font-medium text-slate-300 bg-slate-700/60 hover:bg-slate-700 hover:text-white rounded-lg border border-slate-600 transition flex items-center space-x-1.5"
+          title="匯出 CSV / JSON">
+          <i class="fa-solid fa-download text-emerald-400"></i>
+          <span class="hidden md:inline">備份匯出</span>
+        </button>
+        <button id="btnImportData"
+          class="px-3 py-2 text-xs sm:text-sm font-medium text-slate-300 bg-slate-700/60 hover:bg-slate-700 hover:text-white rounded-lg border border-slate-600 transition flex items-center space-x-1.5"
+          title="匯入資料 (JSON/CSV)">
+          <i class="fa-solid fa-upload text-sky-400"></i>
+          <span class="hidden md:inline">匯入 (JSON/CSV)</span>
+        </button>
+        <input type="file" id="importFileInput" accept=".json,.csv" class="hidden" />
+        <button id="btnNewJob"
+          class="px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-lg shadow-indigo-600/30 transition flex items-center space-x-2">
+          <i class="fa-solid fa-plus"></i>
+          <span>新增求職紀錄</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- Overview Stats Grid -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div
+        class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden">
+        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">總投遞數量</div>
+        <div class="flex items-baseline justify-between mt-2">
+          <span id="statTotal" class="text-3xl font-extrabold text-white">0</span>
+          <span class="text-slate-500 text-sm"><i class="fa-solid fa-paper-plane text-indigo-400"></i></span>
+        </div>
+        <div class="w-full bg-slate-700/40 h-1.5 rounded-full mt-3 overflow-hidden">
+          <div id="statTotalBar" class="bg-indigo-500 h-full w-full"></div>
+        </div>
+      </div>
+
+      <div class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4 flex flex-col justify-between">
+        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">進行中面試</div>
+        <div class="flex items-baseline justify-between mt-2">
+          <span id="statInterviewing" class="text-3xl font-extrabold text-amber-400">0</span>
+          <span class="text-amber-500/80 text-sm"><i class="fa-solid fa-comments"></i></span>
+        </div>
+        <div class="text-xs text-slate-400 mt-2">進入面試階段職缺</div>
+      </div>
+
+      <div class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4 flex flex-col justify-between">
+        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">獲得 Offer</div>
+        <div class="flex items-baseline justify-between mt-2">
+          <span id="statOffer" class="text-3xl font-extrabold text-emerald-400">0</span>
+          <span class="text-emerald-500/80 text-sm"><i class="fa-solid fa-trophy"></i></span>
+        </div>
+        <div class="text-xs text-slate-400 mt-2">成功獲得錄取通知</div>
+      </div>
+
+      <div class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4 flex flex-col justify-between">
+        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">面試轉化率</div>
+        <div class="flex items-baseline justify-between mt-2">
+          <span id="statConversionRate" class="text-3xl font-extrabold text-cyan-400">0%</span>
+          <span class="text-cyan-500/80 text-sm"><i class="fa-solid fa-chart-line"></i></span>
+        </div>
+        <div class="text-xs text-slate-400 mt-2">面試數 / 總投遞數</div>
+      </div>
+    </div>
+
+    <!-- Analytics Accordion / Toggle Section -->
+    <div class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-5 shadow-sm">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-base font-bold text-white flex items-center space-x-2">
+          <i class="fa-solid fa-chart-pie text-indigo-400"></i>
+          <span>數據分析圖表 (Analytics Dashboard)</span>
+        </h2>
+        <button id="toggleChartsBtn" class="text-xs text-slate-400 hover:text-white transition">
+          <i class="fa-solid fa-chevron-up" id="toggleChartsIcon"></i>
+        </button>
+      </div>
+
+      <div id="chartsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-6 transition-all duration-300">
+        <!-- Chart 1: Status Distribution -->
+        <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700/40 flex flex-col items-center">
+          <h3 class="text-xs font-semibold text-slate-300 mb-2 w-full text-left">求職進度狀態比例 (Status Distribution)</h3>
+          <div class="w-full h-64 relative flex items-center justify-center">
+            <canvas id="statusChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Chart 2: Application Trend -->
+        <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700/40 flex flex-col items-center">
+          <h3 class="text-xs font-semibold text-slate-300 mb-2 w-full text-left">近期投遞趨勢 (Application Trend)</h3>
+          <div class="w-full h-64 relative">
+            <canvas id="trendChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Job List Section -->
+    <div class="bg-slate-800/60 border border-slate-700/60 rounded-xl overflow-hidden shadow-sm">
+      <!-- Toolbar Filter & Search -->
+      <div
+        class="p-4 border-b border-slate-700/60 bg-slate-800/90 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <!-- Search Bar -->
+        <div class="relative flex-1 max-w-md">
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+          <input type="text" id="searchInput" placeholder="搜尋公司名稱、職務名稱或關鍵字..."
+            class="w-full pl-9 pr-4 py-2 bg-slate-900/80 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition" />
+        </div>
+
+        <!-- Filters -->
+        <div class="flex items-center space-x-2 overflow-x-auto pb-1 md:pb-0">
+          <select id="statusFilter"
+            class="bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500">
+            <option value="ALL">全部狀態</option>
+            <option value="APPLIED">已投遞 (Applied)</option>
+            <option value="REVIEWING">審核中 (Reviewing)</option>
+            <option value="INTERVIEWING">面試中 (Interviewing)</option>
+            <option value="OFFER">已錄取 (Offer)</option>
+            <option value="REJECTED">遺憾信 (Rejected)</option>
+            <option value="NO_RESPONSE">無回應 (No Response)</option>
+          </select>
+
+          <select id="sortBy"
+            class="bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500">
+            <option value="date-desc">最新投遞優先</option>
+            <option value="date-asc">最早投遞優先</option>
+            <option value="company-asc">公司名稱 (A-Z)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Job Cards Table / List Container -->
+      <div id="jobListContainer" class="divide-y divide-slate-700/50">
+        <!-- Dynamic populated job rows -->
+      </div>
+
+      <!-- Empty State -->
+      <div id="emptyState" class="hidden py-16 text-center px-4">
+        <div
+          class="w-16 h-16 bg-slate-700/40 rounded-full flex items-center justify-center mx-auto text-slate-500 mb-3">
+          <i class="fa-solid fa-folder-open text-2xl"></i>
+        </div>
+        <p class="text-slate-300 font-medium">尚未找到任何求職紀錄</p>
+        <p class="text-xs text-slate-500 mt-1">點擊上方「新增求職紀錄」或「匯入 (JSON/CSV)」載入紀錄吧！</p>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Modal: Add / Edit Job Application -->
+  <div id="jobModal"
+    class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div
+      class="bg-slate-800 border border-slate-700 rounded-xl max-w-2xl w-full shadow-2xl overflow-hidden transform transition-all my-8">
+      <div class="p-5 border-b border-slate-700/80 flex items-center justify-between bg-slate-800/90">
+        <h3 id="modalTitle" class="text-base font-bold text-white flex items-center space-x-2">
+          <i class="fa-solid fa-pen-to-square text-indigo-400"></i>
+          <span>新增求職紀錄</span>
+        </h3>
+        <button id="closeModalBtn" class="text-slate-400 hover:text-white text-lg transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form id="jobForm" class="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+        <input type="hidden" id="jobId" />
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Company Name -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">公司名稱 <span
+                class="text-rose-400">*</span></label>
+            <input type="text" id="inputCompany" required placeholder="例如：Google, 台積電, Tesla..."
+              class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500" />
+          </div>
+
+          <!-- Job Title -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">職務名稱 <span
+                class="text-rose-400">*</span></label>
+            <input type="text" id="inputTitle" required placeholder="例如：Software Engineer / 軟體工程師"
+              class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- Application Date -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">投遞日期</label>
+            <input type="date" id="inputAppliedDate"
+              class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500" />
+          </div>
+
+          <!-- Status -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">目前進度狀態</label>
+            <select id="inputStatus"
+              class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+              <option value="APPLIED">已投遞 (Applied)</option>
+              <option value="REVIEWING">審核中 (Reviewing)</option>
+              <option value="INTERVIEWING">面試中 (Interviewing)</option>
+              <option value="OFFER">已錄取 (Offer)</option>
+              <option value="REJECTED">遺憾信 (Rejected)</option>
+              <option value="NO_RESPONSE">無回應 (No Response)</option>
+            </select>
+          </div>
+
+          <!-- Salary Range / Info -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">薪資待遇 (選填)</label>
+            <input type="text" id="inputSalary" placeholder="例如：面議 / 70k-90k"
+              class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500" />
+          </div>
+        </div>
+
+        <!-- Original Job Link -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">職缺原網址 (Job URL)</label>
+          <input type="url" id="inputUrl" placeholder="https://..."
+            class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500" />
+        </div>
+
+        <!-- Full Job Description & Requirements -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-semibold text-slate-300">完整職缺說明 (JD / Requirements) <span
+                class="text-indigo-400 font-normal">(完整複製保存以防網頁下架)</span></label>
+          </div>
+          <textarea id="inputDescription" rows="7" placeholder="貼上工作內容、技能要求、加分條件等全貌說明..."
+            class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"></textarea>
+        </div>
+
+        <!-- Interview Notes & Prep -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">備註 / 面試問題筆記</label>
+          <textarea id="inputNotes" rows="3" placeholder="紀錄 HR 聯繫內容、面試時間、考題準備..."
+            class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="pt-3 border-t border-slate-700/80 flex items-center justify-end space-x-3">
+          <button type="button" id="cancelFormBtn"
+            class="px-4 py-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-700/50 hover:bg-slate-700 rounded-lg transition">取消</button>
+          <button type="submit"
+            class="px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-md shadow-indigo-600/30 transition">儲存紀錄</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Job Detail Preview -->
+  <div id="detailModal"
+    class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div
+      class="bg-slate-800 border border-slate-700 rounded-xl max-w-3xl w-full shadow-2xl overflow-hidden my-8 flex flex-col max-h-[85vh]">
+      <!-- Header -->
+      <div class="p-5 border-b border-slate-700/80 flex items-center justify-between bg-slate-800">
+        <div>
+          <span id="detailBadge" class="px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide">已投遞</span>
+          <h2 id="detailTitle" class="text-xl font-bold text-white mt-1"></h2>
+          <p id="detailCompany" class="text-sm text-slate-400 font-medium"></p>
+        </div>
+        <button id="closeDetailBtn" class="text-slate-400 hover:text-white text-lg transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Content -->
+      <div class="p-6 overflow-y-auto space-y-6 flex-1 text-slate-300">
+        <!-- Info Strip -->
+        <div
+          class="grid grid-cols-2 md:grid-cols-3 gap-3 bg-slate-900/60 p-3 rounded-lg border border-slate-700/50 text-xs">
+          <div>
+            <span class="text-slate-500 block">投遞日期</span>
+            <span id="detailDate" class="font-medium text-slate-200"></span>
+          </div>
+          <div>
+            <span class="text-slate-500 block">薪資範圍</span>
+            <span id="detailSalary" class="font-medium text-slate-200"></span>
+          </div>
+          <div class="col-span-2 md:col-span-1">
+            <span class="text-slate-500 block">原始網址</span>
+            <a id="detailUrl" href="#" target="_blank"
+              class="text-indigo-400 hover:underline inline-flex items-center space-x-1 truncate max-w-full">
+              <span>造訪網頁</span>
+              <i class="fa-solid fa-up-right-from-square text-[10px]"></i>
+            </a>
+          </div>
+        </div>
+
+        <!-- JD Text Block -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="text-sm font-bold text-white flex items-center space-x-2">
+              <i class="fa-solid fa-file-lines text-indigo-400"></i>
+              <span>完整職缺內文 (Job Description)</span>
+            </h4>
+            <button id="copyJdBtn"
+              class="px-2.5 py-1 text-[11px] bg-slate-700 hover:bg-slate-600 text-slate-200 rounded transition flex items-center space-x-1">
+              <i class="fa-solid fa-copy"></i>
+              <span>複製內容</span>
+            </button>
+          </div>
+          <div id="detailDescription"
+            class="bg-slate-900 p-4 rounded-lg border border-slate-700/60 font-mono text-xs text-slate-300 whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto">
+          </div>
+        </div>
+
+        <!-- Notes Block -->
+        <div>
+          <h4 class="text-sm font-bold text-white mb-2 flex items-center space-x-2">
+            <i class="fa-solid fa-note-sticky text-amber-400"></i>
+            <span>面試與進度筆記</span>
+          </h4>
+          <div id="detailNotes"
+            class="bg-slate-900/80 p-3.5 rounded-lg border border-slate-700/60 text-xs text-slate-300 whitespace-pre-wrap">
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer Actions -->
+      <div class="p-4 border-t border-slate-700/80 bg-slate-800 flex items-center justify-between">
+        <button id="detailDeleteBtn"
+          class="px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10 rounded transition flex items-center space-x-1">
+          <i class="fa-solid fa-trash"></i>
+          <span>刪除這筆紀錄</span>
+        </button>
+        <div class="flex items-center space-x-2">
+          <button id="detailEditBtn"
+            class="px-4 py-1.5 text-xs font-semibold text-slate-200 bg-slate-700 hover:bg-slate-600 rounded-lg transition">編輯內容</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Bookmarklet Guide & Installation -->
+  <div id="bookmarkletModal"
+    class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-slate-800 border border-slate-700 rounded-xl max-w-2xl w-full shadow-2xl overflow-hidden my-8">
+      <div class="p-5 border-b border-slate-700/80 flex items-center justify-between bg-slate-800">
+        <h3 class="text-base font-bold text-white flex items-center space-x-2">
+          <i class="fa-solid fa-bookmark text-indigo-400"></i>
+          <span>一鍵備份書籤 (Bookmarklet) 安裝教學</span>
+        </h3>
+        <button id="closeBookmarkletBtn" class="text-slate-400 hover:text-white text-lg transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-5 text-slate-300 text-xs leading-relaxed">
+        <p class="text-sm">不用安裝複雜外掛！只要將下方按鈕拖曳到你的 **瀏覽器書籤列 (Bookmark Bar)**，即可在各大求職網站（如
+          104、CakeResume、LinkedIn）一鍵抓取內文並自動拆解公司與職位！</p>
+
+        <!-- Drag Target Button -->
+        <div class="bg-slate-900/80 p-5 rounded-lg border border-slate-700 text-center space-y-3">
+          <span class="text-slate-400 text-xs block">👇 請按住下方藍色按鈕，直接拖曳拉到瀏覽器的「書籤列」：</span>
+          <a id="bookmarkletAnchor" href="#"
+            class="inline-block px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow-lg cursor-grab active:cursor-grabbing text-sm border border-indigo-400/40">
+            📌 備份到求職追蹤器
+          </a>
+        </div>
+
+        <div class="space-y-2">
+          <h4 class="font-bold text-slate-200">使用步驟：</h4>
+          <ol class="list-decimal list-inside space-y-1.5 text-slate-400 pl-1">
+            <li>在 104 / CakeResume 等網站看到想投遞的職缺頁面。</li>
+            <li>（可選）用滑鼠**選取框住**特定的 JD 文字內容。若未選取，則預設抓取網頁上所有文字。</li>
+            <li>點擊瀏覽器書籤列上的 <strong class="text-indigo-400">「📌 備份到求職追蹤器」</strong>。</li>
+            <li>系統會自動拆解帶入「公司名稱」、「職務」、「網址」與「完整 JD」！</li>
+          </ol>
+        </div>
+
+        <div class="pt-3 border-t border-slate-700/60">
+          <p class="text-slate-400">若瀏覽器不允許拖曳，你也可以手動新增書籤，網址填入以下 JavaScript 代碼：</p>
+          <div class="mt-2 relative">
+            <textarea id="bookmarkletCode" readonly
+              class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-[11px] font-mono text-indigo-300 h-20 select-all focus:outline-none"></textarea>
+            <button id="copyBookmarkletCodeBtn"
+              class="absolute right-2 top-2 px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] rounded transition">複製代碼</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Export Choice Dialog -->
+  <div id="exportModal"
+    class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full shadow-2xl p-6 text-slate-200">
+      <h3 class="text-base font-bold text-white mb-3 flex items-center space-x-2">
+        <i class="fa-solid fa-file-export text-emerald-400"></i>
+        <span>選擇匯出格式</span>
+      </h3>
+      <p class="text-xs text-slate-400 mb-5">請選擇你想要匯出的資料格式：</p>
+
+      <div class="space-y-3">
+        <button id="exportJsonOption"
+          class="w-full p-3 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded-lg text-left flex items-center justify-between group transition">
+          <div>
+            <div class="text-sm font-semibold text-white group-hover:text-indigo-300">JSON 格式 (.json)</div>
+            <div class="text-xs text-slate-400">完整備份，包含所有內部欄位與 ID，適合系統搬移</div>
+          </div>
+          <i class="fa-solid fa-code text-indigo-400"></i>
+        </button>
+
+        <button id="exportCsvOption"
+          class="w-full p-3 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded-lg text-left flex items-center justify-between group transition">
+          <div>
+            <div class="text-sm font-semibold text-white group-hover:text-emerald-300">CSV 試算表 (.csv)</div>
+            <div class="text-xs text-slate-400">適用於 Microsoft Excel 或 Google Sheets 開啟編輯</div>
+          </div>
+          <i class="fa-solid fa-file-csv text-emerald-400"></i>
+        </button>
+      </div>
+
+      <div class="mt-5 text-right">
+        <button id="closeExportModalBtn"
+          class="px-4 py-2 text-xs text-slate-400 hover:text-white transition">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Custom Confirm Dialog -->
+  <div id="customConfirmModal"
+    class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full shadow-2xl p-6 text-slate-200">
+      <h3 id="confirmTitle" class="text-base font-bold text-white mb-2">確認提示</h3>
+      <p id="confirmMessage" class="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed mb-6"></p>
+      <div id="confirmActions" class="flex justify-end space-x-3">
+        <button id="confirmBtnSecondary"
+          class="px-4 py-2 text-xs font-medium text-slate-300 bg-slate-700 hover:bg-slate-600 rounded-lg transition">取消</button>
+        <button id="confirmBtnPrimary"
+          class="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition">確定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Toast -->
+  <div id="toast"
+    class="fixed bottom-5 right-5 bg-indigo-600 text-white text-xs px-4 py-3 rounded-lg shadow-2xl transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center space-x-2">
+    <i class="fa-solid fa-circle-check"></i>
+    <span id="toastMsg">通知訊息</span>
+  </div>
+
+  <script>
+    // Status Meta Mapping
+    const STATUS_CONFIG = {
+      APPLIED: {label: '已投遞', bg: 'bg-indigo-500/20', text: 'text-indigo-400', border: 'border-indigo-500/30', color: '#6366f1'},
+      REVIEWING: {label: '審核中', bg: 'bg-sky-500/20', text: 'text-sky-400', border: 'border-sky-500/30', color: '#0ea5e9'},
+      INTERVIEWING: {label: '面試中', bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30', color: '#f59e0b'},
+      OFFER: {label: '已錄取', bg: 'bg-emerald-500/20', text: 'text-emerald-400', border: 'border-emerald-500/30', color: '#10b981'},
+      REJECTED: {label: '遺憾信', bg: 'bg-rose-500/20', text: 'text-rose-400', border: 'border-rose-500/30', color: '#f43f5e'},
+      NO_RESPONSE: {label: '無回應', bg: 'bg-slate-500/20', text: 'text-slate-400', border: 'border-slate-500/30', color: '#64748b'}
+    };
+
+    // Application State
+    let jobs = [];
+    let currentDetailJobId = null;
+    let statusChartInstance = null;
+    let trendChartInstance = null;
+
+    // DOM Elements
+    const jobListContainer = document.getElementById('jobListContainer');
+    const emptyState = document.getElementById('emptyState');
+    const jobModal = document.getElementById('jobModal');
+    const detailModal = document.getElementById('detailModal');
+    const bookmarkletModal = document.getElementById('bookmarkletModal');
+    const exportModal = document.getElementById('exportModal');
+    const jobForm = document.getElementById('jobForm');
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      // 1. 初始化圖表元件
+      initCharts();
+
+      // 2. 載入 LocalStorage 或嘗試讀取 CSV
+      await loadJobsFromStorage();
+
+      // 3. 設定 Bookmarklet 腳本與解析 URL 參數
+      setupBookmarkletScript();
+      parseUrlParameters();
+
+      // 4. 渲染 UI 與圖表數據
+      renderApp();
+
+      // Setup Event Listeners
+      document.getElementById('btnNewJob').addEventListener('click', () => openJobModal());
+      document.getElementById('closeModalBtn').addEventListener('click', closeJobModal);
+      document.getElementById('cancelFormBtn').addEventListener('click', closeJobModal);
+      document.getElementById('closeDetailBtn').addEventListener('click', closeDetailModal);
+      document.getElementById('btnBookmarkletHelp').addEventListener('click', openBookmarkletModal);
+      document.getElementById('closeBookmarkletBtn').addEventListener('click', closeBookmarkletModal);
+
+      // Search & Filter Listeners
+      document.getElementById('searchInput').addEventListener('input', renderJobList);
+      document.getElementById('statusFilter').addEventListener('change', renderJobList);
+      document.getElementById('sortBy').addEventListener('change', renderJobList);
+
+      // Export/Import Listeners
+      document.getElementById('btnExportData').addEventListener('click', openExportModal);
+      document.getElementById('closeExportModalBtn').addEventListener('click', closeExportModal);
+      document.getElementById('exportJsonOption').addEventListener('click', exportJSON);
+      document.getElementById('exportCsvOption').addEventListener('click', exportCSV);
+
+      document.getElementById('btnImportData').addEventListener('click', () => document.getElementById('importFileInput').click());
+      document.getElementById('importFileInput').addEventListener('change', importDataFile);
+
+      // Form Submit
+      jobForm.addEventListener('submit', handleFormSubmit);
+
+      // Detail Modal Actions
+      document.getElementById('copyJdBtn').addEventListener('click', copyJdToClipboard);
+      document.getElementById('detailEditBtn').addEventListener('click', editFromDetail);
+      document.getElementById('detailDeleteBtn').addEventListener('click', deleteFromDetail);
+
+      // Charts Toggle
+      document.getElementById('toggleChartsBtn').addEventListener('click', toggleChartsVisibility);
+
+      // Bookmarklet Copy Code
+      document.getElementById('copyBookmarkletCodeBtn').addEventListener('click', () => {
+        const code = document.getElementById('bookmarkletCode');
+        code.select();
+        document.execCommand('copy');
+        showToast('已複製書籤代碼！');
+      });
+    });
+
+    async function loadJobsFromStorage() {
+      try {
+        const stored = localStorage.getItem('job_tracker_data_v1');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            jobs = parsed;
+            return;
+          }
+        }
+        // 若 LocalStorage 無數據，嘗試從同目錄 fetch CSV
+        await fetchInitialCsvData();
+      } catch (e) {
+        console.error('Failed to load from localStorage', e);
+        jobs = [];
+      }
+    }
+
+    async function fetchInitialCsvData() {
+      const csvFileName = 'job_tracker_db.csv';
+      try {
+        const response = await fetch(`./${csvFileName}`);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const csvText = await response.text();
+        const parsedJobs = parseCsvToJobs(csvText);
+        if (parsedJobs && parsedJobs.length > 0) {
+          jobs = parsedJobs;
+          saveJobsToStorage();
+          showToast(`已成功自動讀取 ${jobs.length} 筆預設求職資料！`);
+        }
+      } catch (err) {
+        console.log('未檢測到本地 CSV 或受限於 file:// 協定阻擋，請使用右上角「匯入 (JSON/CSV)」手動載入:', err);
+      }
+    }
+
+    // 支援處理多行引號 (Multiline CSV) 的解析器
+    function parseCsvToJobs(text) {
+      if (!text || text.trim() === '') return [];
+
+      const rows = [];
+      let currentRow = [];
+      let currentVal = '';
+      let insideQuotes = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const nextChar = text[i + 1];
+
+        if (char === '"') {
+          if (insideQuotes && nextChar === '"') {
+            currentVal += '"';
+            i++;
+          } else {
+            insideQuotes = !insideQuotes;
+          }
+        } else if (char === ',' && !insideQuotes) {
+          currentRow.push(currentVal.trim());
+          currentVal = '';
+        } else if ((char === '\r' || char === '\n') && !insideQuotes) {
+          if (char === '\r' && nextChar === '\n') {
+            i++;
+          }
+          currentRow.push(currentVal.trim());
+          if (currentRow.some(field => field !== '')) {
+            rows.push(currentRow);
+          }
+          currentRow = [];
+          currentVal = '';
+        } else {
+          currentVal += char;
+        }
+      }
+      if (currentVal || currentRow.length > 0) {
+        currentRow.push(currentVal.trim());
+        rows.push(currentRow);
+      }
+
+      if (rows.length <= 1) return [];
+
+      const headers = rows[0];
+      const result = [];
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.length < 2) continue;
+
+        let rowObj = {};
+        headers.forEach((h, idx) => {
+          rowObj[h] = row[idx] || '';
+        });
+
+        // 狀態對應判斷
+        let statusKey = 'APPLIED';
+        const rawStatus = rowObj['狀態'] || '';
+        if (rawStatus.includes('審核')) statusKey = 'REVIEWING';
+        else if (rawStatus.includes('面試')) statusKey = 'INTERVIEWING';
+        else if (rawStatus.includes('錄取') || rawStatus.toLowerCase().includes('offer')) statusKey = 'OFFER';
+        else if (rawStatus.includes('遺憾') || rawStatus.includes('拒絕')) statusKey = 'REJECTED';
+        else if (rawStatus.includes('無回應')) statusKey = 'NO_RESPONSE';
+
+        result.push({
+          id: 'csv-' + Date.now() + '-' + i,
+          company: rowObj['公司名稱'] || '未知公司',
+          title: rowObj['職務名稱'] || '未知職務',
+          appliedDate: rowObj['投遞日期'] || new Date().toISOString().split('T')[0],
+          status: statusKey,
+          salary: rowObj['薪資待遇'] || '',
+          url: rowObj['職缺網址'] || '',
+          description: rowObj['完整JD說明'] || '',
+          notes: rowObj['筆記備註'] || '',
+          createdAt: Date.now() - (i * 1000)
+        });
+      }
+      return result;
+    }
+
+    function saveJobsToStorage() {
+      localStorage.setItem('job_tracker_data_v1', JSON.stringify(jobs));
+    }
+
+    function parseUrlParameters() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+
+      let company = urlParams.get('company') || hashParams.get('company') || '';
+      let title = urlParams.get('title') || hashParams.get('title') || '';
+      const url = urlParams.get('url') || hashParams.get('url') || '';
+      const jd = urlParams.get('jd') || hashParams.get('jd') || '';
+
+      if (company || title || jd || url) {
+        if (!company || company === title) {
+          const match104 = title.match(/【(.*?)】\s*([^\-|－|\|]+)/);
+          if (match104) {
+            title = match104[1].trim();
+            company = match104[2].trim();
+          } else if (title.includes(' - ')) {
+            const parts = title.split(' - ');
+            title = parts[0].trim();
+            company = parts[1].trim();
+          } else if (title.includes(' ｜ ')) {
+            const parts = title.split(' ｜ ');
+            title = parts[0].trim();
+            company = parts[1].trim();
+          } else if (title.includes(' | ')) {
+            const parts = title.split(' | ');
+            title = parts[0].trim();
+            company = parts[1].trim();
+          }
+        }
+
+        openJobModal({
+          company: company || '未知公司',
+          title: title || '未知職務',
+          url: url || '',
+          description: jd || '',
+          appliedDate: new Date().toISOString().split('T')[0],
+          status: 'APPLIED'
+        });
+        showToast('已成功自動拆解並帶入職缺！請確認後儲存。');
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+
+    function initCharts() {
+      const ctxStatus = document.getElementById('statusChart').getContext('2d');
+      statusChartInstance = new Chart(ctxStatus, {
+        type: 'doughnut',
+        data: {
+          labels: [],
+          datasets: [{
+            data: [],
+            backgroundColor: [],
+            borderWidth: 2,
+            borderColor: '#1e293b'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                color: '#94a3b8',
+                font: {size: 11},
+                padding: 12
+              }
+            }
+          }
+        }
+      });
+
+      const ctxTrend = document.getElementById('trendChart').getContext('2d');
+      trendChartInstance = new Chart(ctxTrend, {
+        type: 'bar',
+        data: {
+          labels: [],
+          datasets: [{
+            label: '投遞數量',
+            data: [],
+            backgroundColor: '#6366f1',
+            borderRadius: 4,
+            hoverBackgroundColor: '#818cf8'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              ticks: {color: '#94a3b8', font: {size: 10}},
+              grid: {display: false}
+            },
+            y: {
+              ticks: {color: '#94a3b8', precision: 0},
+              grid: {color: '#334155'},
+              beginAtZero: true
+            }
+          },
+          plugins: {
+            legend: {display: false}
+          }
+        }
+      });
+    }
+
+    function updateCharts() {
+      if (!statusChartInstance || !trendChartInstance) return;
+
+      // Update Status Chart
+      const statusCounts = {};
+      Object.keys(STATUS_CONFIG).forEach(k => statusCounts[k] = 0);
+      jobs.forEach(j => {
+        if (statusCounts[j.status] !== undefined) statusCounts[j.status]++;
+        else statusCounts['APPLIED']++;
+      });
+
+      const labels = [];
+      const data = [];
+      const colors = [];
+
+      Object.keys(STATUS_CONFIG).forEach(k => {
+        if (statusCounts[k] > 0) {
+          labels.push(STATUS_CONFIG[k].label);
+          data.push(statusCounts[k]);
+          colors.push(STATUS_CONFIG[k].color);
+        }
+      });
+
+      statusChartInstance.data.labels = labels;
+      statusChartInstance.data.datasets[0].data = data;
+      statusChartInstance.data.datasets[0].backgroundColor = colors;
+      statusChartInstance.update();
+
+      // Update Trend Chart (Weekly/Daily Aggregation)
+      const dateMap = {};
+      jobs.forEach(j => {
+        if (j.appliedDate) {
+          dateMap[j.appliedDate] = (dateMap[j.appliedDate] || 0) + 1;
+        }
+      });
+
+      const sortedDates = Object.keys(dateMap).sort();
+      const recentDates = sortedDates.slice(-10); // 取最近 10 個有紀錄的日期
+
+      trendChartInstance.data.labels = recentDates.length > 0 ? recentDates : ['無資料'];
+      trendChartInstance.data.datasets[0].data = recentDates.length > 0 ? recentDates.map(d => dateMap[d]) : [0];
+      trendChartInstance.update();
+    }
+
+    function renderApp() {
+      renderJobList();
+      updateDashboardStats();
+      updateCharts();
+    }
+
+    function renderJobList() {
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const statusFilter = document.getElementById('statusFilter').value;
+      const sortBy = document.getElementById('sortBy').value;
+
+      let filtered = jobs.filter(job => {
+        const matchSearch = (job.company || '').toLowerCase().includes(search) ||
+          (job.title || '').toLowerCase().includes(search) ||
+          (job.description || '').toLowerCase().includes(search) ||
+          (job.notes || '').toLowerCase().includes(search);
+        const matchStatus = statusFilter === 'ALL' || job.status === statusFilter;
+        return matchSearch && matchStatus;
+      });
+
+      filtered.sort((a, b) => {
+        if (sortBy === 'date-desc') return new Date(b.appliedDate || 0) - new Date(a.appliedDate || 0);
+        if (sortBy === 'date-asc') return new Date(a.appliedDate || 0) - new Date(b.appliedDate || 0);
+        if (sortBy === 'company-asc') return (a.company || '').localeCompare(b.company || '');
+        return 0;
+      });
+
+      jobListContainer.innerHTML = '';
+
+      if (filtered.length === 0) {
+        emptyState.classList.remove('hidden');
+      } else {
+        emptyState.classList.add('hidden');
+        filtered.forEach(job => {
+          const cfg = STATUS_CONFIG[job.status] || STATUS_CONFIG.APPLIED;
+          const card = document.createElement('div');
+          card.className = 'p-4 hover:bg-slate-800/80 transition flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer group';
+          card.onclick = (e) => {
+            if (e.target.closest('a') || e.target.closest('button')) return;
+            openDetailModal(job.id);
+          };
+
+          card.innerHTML = `
+            <div class="flex items-start space-x-3.5 flex-1 min-w-0">
+              <div class="w-10 h-10 rounded-lg bg-slate-700/60 border border-slate-600/50 flex items-center justify-center text-slate-300 font-bold text-base flex-shrink-0 mt-0.5 group-hover:border-indigo-500/50 group-hover:text-indigo-400 transition">
+                ${escapeHtml((job.company || '?').charAt(0).toUpperCase())}
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center space-x-2 flex-wrap gap-y-1">
+                  <h3 class="text-sm font-semibold text-white group-hover:text-indigo-300 transition truncate">${escapeHtml(job.title)}</h3>
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${cfg.bg} ${cfg.text} border ${cfg.border}">${cfg.label}</span>
+                </div>
+                <div class="flex items-center space-x-3 text-xs text-slate-400 mt-1 flex-wrap">
+                  <span class="font-medium text-slate-300"><i class="fa-regular fa-building mr-1"></i>${escapeHtml(job.company)}</span>
+                  <span><i class="fa-regular fa-calendar mr-1"></i>${job.appliedDate || '未填寫'}</span>
+                  ${job.salary ? `<span><i class="fa-solid fa-coins mr-1"></i>${escapeHtml(job.salary)}</span>` : ''}
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center space-x-2 self-end md:self-center flex-shrink-0">
+              ${job.url ? `
+                <a href="${escapeHtml(job.url)}" target="_blank" class="p-2 text-slate-400 hover:text-indigo-400 hover:bg-slate-700/60 rounded-lg transition" title="前往原始網址">
+                  <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                </a>
+              ` : ''}
+              <button onclick="openJobModal('${job.id}')" class="p-2 text-slate-400 hover:text-white hover:bg-slate-700/60 rounded-lg transition" title="編輯">
+                <i class="fa-solid fa-pen"></i>
+              </button>
+              <button onclick="confirmDeleteJob('${job.id}')" class="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-700/60 rounded-lg transition" title="刪除">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          `;
+          jobListContainer.appendChild(card);
+        });
+      }
+    }
+
+    function updateDashboardStats() {
+      const total = jobs.length;
+      const interviewing = jobs.filter(j => j.status === 'INTERVIEWING').length;
+      const offer = jobs.filter(j => j.status === 'OFFER').length;
+      const conversionRate = total > 0 ? ((interviewing + offer) / total * 100).toFixed(1) : 0;
+
+      document.getElementById('statTotal').innerText = total;
+      document.getElementById('statInterviewing').innerText = interviewing;
+      document.getElementById('statOffer').innerText = offer;
+      document.getElementById('statConversionRate').innerText = `${conversionRate}%`;
+    }
+
+    function openJobModal(jobOrId = null) {
+      document.getElementById('jobForm').reset();
+      document.getElementById('jobId').value = '';
+
+      if (typeof jobOrId === 'string') {
+        const job = jobs.find(j => j.id === jobOrId);
+        if (job) {
+          document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-pen-to-square text-indigo-400"></i> <span>編輯求職紀錄</span>';
+          document.getElementById('jobId').value = job.id;
+          document.getElementById('inputCompany').value = job.company || '';
+          document.getElementById('inputTitle').value = job.title || '';
+          document.getElementById('inputAppliedDate').value = job.appliedDate || '';
+          document.getElementById('inputStatus').value = job.status || 'APPLIED';
+          document.getElementById('inputSalary').value = job.salary || '';
+          document.getElementById('inputUrl').value = job.url || '';
+          document.getElementById('inputDescription').value = job.description || '';
+          document.getElementById('inputNotes').value = job.notes || '';
+        }
+      } else if (typeof jobOrId === 'object' && jobOrId !== null) {
+        document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus text-indigo-400"></i> <span>新增求職紀錄</span>';
+        document.getElementById('inputCompany').value = jobOrId.company || '';
+        document.getElementById('inputTitle').value = jobOrId.title || '';
+        document.getElementById('inputAppliedDate').value = jobOrId.appliedDate || new Date().toISOString().split('T')[0];
+        document.getElementById('inputStatus').value = jobOrId.status || 'APPLIED';
+        document.getElementById('inputUrl').value = jobOrId.url || '';
+        document.getElementById('inputDescription').value = jobOrId.description || '';
+      } else {
+        document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus text-indigo-400"></i> <span>新增求職紀錄</span>';
+        document.getElementById('inputAppliedDate').value = new Date().toISOString().split('T')[0];
+      }
+
+      jobModal.classList.remove('hidden');
+    }
+
+    function closeJobModal() {
+      jobModal.classList.add('hidden');
+    }
+
+    function handleFormSubmit(e) {
+      e.preventDefault();
+      const id = document.getElementById('jobId').value;
+      const jobData = {
+        id: id || 'job-' + Date.now(),
+        company: document.getElementById('inputCompany').value.trim(),
+        title: document.getElementById('inputTitle').value.trim(),
+        appliedDate: document.getElementById('inputAppliedDate').value,
+        status: document.getElementById('inputStatus').value,
+        salary: document.getElementById('inputSalary').value.trim(),
+        url: document.getElementById('inputUrl').value.trim(),
+        description: document.getElementById('inputDescription').value.trim(),
+        notes: document.getElementById('inputNotes').value.trim(),
+        createdAt: id ? (jobs.find(j => j.id === id)?.createdAt || Date.now()) : Date.now()
+      };
+
+      if (id) {
+        const index = jobs.findIndex(j => j.id === id);
+        if (index !== -1) jobs[index] = jobData;
+      } else {
+        jobs.unshift(jobData);
+      }
+
+      saveJobsToStorage();
+      renderApp();
+      closeJobModal();
+      showToast(id ? '更新成功！' : '新增紀錄成功！');
+    }
+
+    function openDetailModal(id) {
+      const job = jobs.find(j => j.id === id);
+      if (!job) return;
+
+      currentDetailJobId = id;
+      const cfg = STATUS_CONFIG[job.status] || STATUS_CONFIG.APPLIED;
+
+      const badge = document.getElementById('detailBadge');
+      badge.innerText = cfg.label;
+      badge.className = `px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide ${cfg.bg} ${cfg.text} border ${cfg.border}`;
+
+      document.getElementById('detailTitle').innerText = job.title;
+      document.getElementById('detailCompany').innerText = job.company;
+      document.getElementById('detailDate').innerText = job.appliedDate || '未填寫';
+      document.getElementById('detailSalary').innerText = job.salary || '未填寫';
+
+      const detailUrl = document.getElementById('detailUrl');
+      if (job.url) {
+        detailUrl.href = job.url;
+        detailUrl.classList.remove('hidden');
+      } else {
+        detailUrl.classList.add('hidden');
+      }
+
+      document.getElementById('detailDescription').innerText = job.description || '無內文說明';
+      document.getElementById('detailNotes').innerText = job.notes || '尚無面試筆記';
+
+      detailModal.classList.remove('hidden');
+    }
+
+    function closeDetailModal() {
+      detailModal.classList.add('hidden');
+      currentDetailJobId = null;
+    }
+
+    function copyJdToClipboard() {
+      const text = document.getElementById('detailDescription').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('已複製 JD 內文至剪貼簿！');
+      });
+    }
+
+    function editFromDetail() {
+      const id = currentDetailJobId;
+      closeDetailModal();
+      openJobModal(id);
+    }
+
+    function deleteFromDetail() {
+      const id = currentDetailJobId;
+      confirmDeleteJob(id, () => {
+        closeDetailModal();
+      });
+    }
+
+    function confirmDeleteJob(id, callback = null) {
+      showConfirmModal('確認刪除', '確定要刪除這筆求職紀錄嗎？刪除後無法復原。', () => {
+        jobs = jobs.filter(j => j.id !== id);
+        saveJobsToStorage();
+        renderApp();
+        showToast('已成功刪除紀錄');
+        if (callback) callback();
+      });
+    }
+
+    function setupBookmarkletScript() {
+      const origin = window.location.origin + window.location.pathname;
+      const scriptCode = `javascript:(function(){var title=document.title||'';var url=window.location.href;var sel=window.getSelection().toString();var jd=sel?sel:document.body.innerText.substring(0,2500);var target='${origin}?title='+encodeURIComponent(title)+'&url='+encodeURIComponent(url)+'&jd='+encodeURIComponent(jd);window.open(target,'_blank');})();`;
+
+      document.getElementById('bookmarkletAnchor').href = scriptCode;
+      document.getElementById('bookmarkletCode').value = scriptCode;
+    }
+
+    function openBookmarkletModal() {bookmarkletModal.classList.remove('hidden');}
+    function closeBookmarkletModal() {bookmarkletModal.classList.add('hidden');}
+    function openExportModal() {exportModal.classList.remove('hidden');}
+    function closeExportModal() {exportModal.classList.add('hidden');}
+
+    function exportJSON() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(jobs, null, 2));
+      downloadFile(dataStr, `job_tracker_backup_${getFormattedDate()}.json`);
+      closeExportModal();
+    }
+
+    function exportCSV() {
+      let csvContent = "\uFEFF"; // UTF-8 BOM
+      csvContent += "公司名稱,職務名稱,投遞日期,狀態,薪資待遇,職缺網址,完整JD說明,筆記備註\n";
+
+      jobs.forEach(j => {
+        const row = [
+          escapeCsvField(j.company),
+          escapeCsvField(j.title),
+          escapeCsvField(j.appliedDate),
+          escapeCsvField(STATUS_CONFIG[j.status]?.label || '已投遞'),
+          escapeCsvField(j.salary),
+          escapeCsvField(j.url),
+          escapeCsvField(j.description),
+          escapeCsvField(j.notes)
+        ];
+        csvContent += row.join(",") + "\n";
+      });
+
+      const dataStr = "data:text/csv;charset=utf-8," + encodeURIComponent(csvContent);
+      downloadFile(dataStr, `job_tracker_export_${getFormattedDate()}.csv`);
+      closeExportModal();
+    }
+
+    function escapeCsvField(field) {
+      if (!field) return '""';
+      let str = String(field).replace(/"/g, '""');
+      return `"${str}"`;
+    }
+
+    function downloadFile(dataUri, fileName) {
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataUri);
+      downloadAnchor.setAttribute("download", fileName);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      showToast('已成功匯出備份檔案！');
+    }
+
+    function importDataFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const content = event.target.result;
+          if (file.name.endsWith('.json')) {
+            const imported = JSON.parse(content);
+            if (Array.isArray(imported)) {
+              jobs = imported;
+              saveJobsToStorage();
+              renderApp();
+              showToast('已成功匯入 JSON 資料！');
+            }
+          } else if (file.name.endsWith('.csv')) {
+            const parsed = parseCsvToJobs(content);
+            if (parsed && parsed.length > 0) {
+              jobs = parsed;
+              saveJobsToStorage();
+              renderApp();
+              showToast(`已成功匯入 ${parsed.length} 筆 CSV 求職紀錄！`);
+            }
+          }
+        } catch (err) {
+          showToast('檔案格式解析失敗，請確認內容為有效的 JSON 或 CSV');
+        }
+        e.target.value = '';
+      };
+      reader.readAsText(file);
+    }
+
+    function toggleChartsVisibility() {
+      const container = document.getElementById('chartsContainer');
+      const icon = document.getElementById('toggleChartsIcon');
+      if (container.classList.contains('hidden')) {
+        container.classList.remove('hidden');
+        icon.className = 'fa-solid fa-chevron-up';
+      } else {
+        container.classList.add('hidden');
+        icon.className = 'fa-solid fa-chevron-down';
+      }
+    }
+
+    function showConfirmModal(title, message, onConfirm) {
+      const modal = document.getElementById('customConfirmModal');
+      document.getElementById('confirmTitle').innerText = title;
+      document.getElementById('confirmMessage').innerText = message;
+
+      const primaryBtn = document.getElementById('confirmBtnPrimary');
+      const secondaryBtn = document.getElementById('confirmBtnSecondary');
+
+      const cleanup = () => {
+        modal.classList.add('hidden');
+        primaryBtn.onclick = null;
+        secondaryBtn.onclick = null;
+      };
+
+      primaryBtn.onclick = () => {cleanup(); onConfirm();};
+      secondaryBtn.onclick = cleanup;
+      modal.classList.remove('hidden');
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastMsg').innerText = msg;
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3000);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    function getFormattedDate() {
+      return new Date().toISOString().split('T')[0];
+    }
+  </script>
+</body>
+
+</html>
